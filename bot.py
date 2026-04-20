@@ -47,7 +47,8 @@ class Database:
         if cls._conn: cls._conn.close(); cls._conn = None
 
 user_last_action = {}
-def check_rate_limit(user_id):    now = time.time()
+def check_rate_limit(user_id):
+    now = time.time()
     last = user_last_action.get(user_id, 0)
     if now - last < RATE_LIMIT_SEC: return False
     user_last_action[user_id] = now
@@ -62,8 +63,7 @@ def bottom_kb(admin=False):
     kb.add(types.KeyboardButton("🎫 Поддержка"))
     if admin: kb.add(types.KeyboardButton("📊 Админка"))
     return kb
-
-@bot.message_handler(commands=["start"])
+    @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     uid, uname = msg.from_user.id, msg.from_user.username
     Database.execute("INSERT OR IGNORE INTO users (id, username, joined_at) VALUES (?,?,?)", (uid, uname, datetime.now().isoformat()))
@@ -96,7 +96,8 @@ def show_prods(call):
     for p in prods:
         stock = Database.execute("SELECT count() FROM inventory WHERE prod_id=? AND status='available'", (p['id'],), fetch=True)[0]
         txt = f"🛒 {p['name']} | {p['price']}₽ ({stock})" if stock > 0 else f"❌ {p['name']} | {p['price']}₽"
-        kb.add(types.InlineKeyboardButton(txt, callback_data=f"buy_{p['id']}" if stock > 0 else "noop"))    kb.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_menu"))
+        kb.add(types.InlineKeyboardButton(txt, callback_data=f"buy_{p['id']}" if stock > 0 else "noop"))
+    kb.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_menu"))
     bot.edit_message_text("📦 <b>Товары</b>", call.message.chat.id, call.message.message_id, reply_markup=kb)
     bot.answer_callback_query(call.id)
 
@@ -117,8 +118,7 @@ def process_buy(call):
     Database.execute("INSERT INTO orders (user_id, prod_id, key_sent, amount, created_at) VALUES (?,?,?,?,?)", (uid, pid, item['key_data'], prod['price'], datetime.now().isoformat()))
     bot.send_message(uid, f"✅ <b>Успешно!</b>\n📦 {prod['name']}\n💰 -{prod['price']}₽\n🔑 <code>{item['key_data']}</code>\n<i>Сохрани ключ!</i>")
     bot.answer_callback_query(call.id, "Выдано")
-
-@bot.message_handler(func=lambda m: m.text == "🎫 Поддержка")
+    @bot.message_handler(func=lambda m: m.text == "🎫 Поддержка")
 def open_support(msg):
     user_states[msg.from_user.id] = "support"
     bot.send_message(msg.chat.id, "🎫 <b>Поддержка</b>\nОпишите проблему.\nДля выхода: /start")
@@ -145,6 +145,7 @@ def add_cat(msg):
     if len(p) < 3: return bot.send_message(msg.chat.id, "❌ /addcat Название Эмодзи")
     Database.execute("INSERT INTO categories (name, emoji) VALUES (?,?)", (p[1], p[2]))
     bot.send_message(msg.chat.id, f"✅ Категория '{p[1]}' создана")
+
 @bot.message_handler(commands=["addprod"])
 def add_prod(msg):
     if not is_admin(msg.from_user.id): return
@@ -183,7 +184,6 @@ def admin_reply(msg):
     except Exception as e:
         bot.send_message(msg.chat.id, f"❌ {e}")
 
-# 🌐 KEEP-ALIVE СЕРВЕР (чтобы Render не спал)
 app = Flask(__name__)
 @app.route("/")
 def alive(): return "Bot is running"
