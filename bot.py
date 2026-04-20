@@ -47,7 +47,8 @@ def init_db():
             desc TEXT,
             price REAL,
             is_active BOOLEAN DEFAULT 1
-        );        CREATE TABLE IF NOT EXISTS inventory (
+        );
+        CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             prod_id INTEGER,
             key_data TEXT,
@@ -96,7 +97,8 @@ user_states = {}
 def is_admin(uid):
     return uid == ADMIN_ID
 
-def bottom_keyboard(admin=False):    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+def bottom_keyboard(admin=False):
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     kb.add(
         types.KeyboardButton("🛍 Каталог"),
         types.KeyboardButton("👤 Профиль")
@@ -145,7 +147,8 @@ def show_profile(message):
     conn = get_db()
     order_count = conn.execute(
         "SELECT count() FROM orders WHERE user_id=?",
-        (message.from_user.id,)    ).fetchone()[0]
+        (message.from_user.id,)
+    ).fetchone()[0]
     conn.close()
     
     text = (
@@ -194,7 +197,7 @@ def show_categories(message):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("cat_"))
 def show_products(callback):
     cid = int(callback.data.split("_")[1])
-        conn = get_db()
+    conn = get_db()
     products = conn.execute(
         "SELECT id, name, price FROM products WHERE cat_id=? AND is_active=1",
         (cid,)
@@ -243,7 +246,8 @@ def back_to_menu(callback):
 @bot.callback_query_handler(func=lambda c: c.data == "no_stock")
 def no_stock_alert(callback):
     bot.answer_callback_query(
-        callback.id,        "Товара нет на складе",
+        callback.id,
+        "Товара нет на складе",
         show_alert=True
     )
 
@@ -292,7 +296,8 @@ def process_purchase(callback):
     key_data = item['key_data']
     
     # Atomic transaction: mark key as sold + create order
-    conn.execute("UPDATE inventory SET status='sold' WHERE id=?", (key_id,))    conn.execute(
+    conn.execute("UPDATE inventory SET status='sold' WHERE id=?", (key_id,))
+    conn.execute(
         "INSERT INTO orders (user_id, prod_id, key_sent, amount, created_at) VALUES (?, ?, ?, ?, ?)",
         (uid, pid, key_data, product['price'], datetime.now().isoformat())
     )
@@ -341,7 +346,8 @@ def handle_support_message(message):
     conn.commit()
     conn.close()
     
-    # Notify admin    bot.send_message(
+    # Notify admin
+    bot.send_message(
         ADMIN_ID,
         f"🎫 <b>Новый тикет #{ticket_id}</b>\n"
         f"👤 Пользователь: {message.from_user.id}\n"
@@ -390,7 +396,8 @@ def add_category_command(message):
     if len(parts) < 3:
         return bot.send_message(
             message.chat.id,
-            "❌ Формат: <code>/addcat Название Эмодзи</code>\n"            "Пример: <code>/addcat Игры 🎮</code>",
+            "❌ Формат: <code>/addcat Название Эмодзи</code>\n"
+            "Пример: <code>/addcat Игры 🎮</code>",
             parse_mode="HTML"
         )
     
@@ -439,7 +446,8 @@ def add_product_command(message):
 
 @bot.message_handler(commands=["addkeys"])
 def start_add_keys_command(message):
-    if not is_admin(message.from_user.id):        return
+    if not is_admin(message.from_user.id):
+        return
     
     parts = message.text.split()
     if len(parts) < 2:
@@ -488,7 +496,8 @@ def save_keys_batch(message):
 @bot.message_handler(commands=["reply"])
 def admin_reply_to_ticket(message):
     if not is_admin(message.from_user.id):
-        return    
+        return
+    
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
         return bot.send_message(
@@ -537,7 +546,8 @@ if __name__ == "__main__":
     logger.info("🚀 Запуск PRO-бота...")
     
     # Initialize database
-    init_db()    logger.info("✅ База данных готова.")
+    init_db()
+    logger.info("✅ База данных готова.")
     
     # Start Flask server in background thread (for Render keep-alive)
     flask_thread = threading.Thread(target=run_flask_server, daemon=True)
