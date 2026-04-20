@@ -3,6 +3,7 @@ import logging
 import sqlite3
 import time
 import threading
+import requests
 from datetime import datetime
 from telebot import TeleBot, types
 from flask import Flask
@@ -266,7 +267,6 @@ def process_purchase(callback):
     
     conn = get_db()
     
-    # Get product info
     product = conn.execute(
         "SELECT name, price FROM products WHERE id=?",
         (pid,)
@@ -279,7 +279,6 @@ def process_purchase(callback):
             show_alert=True
         )
     
-    # Get available key
     item = conn.execute(
         "SELECT id, key_data FROM inventory WHERE prod_id=? AND status='available' LIMIT 1",
         (pid,)
@@ -295,7 +294,6 @@ def process_purchase(callback):
     key_id = item['id']
     key_data = item['key_data']
     
-    # Atomic transaction: mark key as sold + create order
     conn.execute("UPDATE inventory SET status='sold' WHERE id=?", (key_id,))
     conn.execute(
         "INSERT INTO orders (user_id, prod_id, key_sent, amount, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -304,7 +302,6 @@ def process_purchase(callback):
     conn.commit()
     conn.close()
     
-    # Send key to user
     bot.send_message(
         uid,
         f"✅ <b>Покупка успешна!</b>\n\n"
@@ -332,13 +329,11 @@ def open_support(message):
 def handle_support_message(message):
     conn = get_db()
     
-    # Create ticket
     ticket_id = conn.execute(
         "INSERT INTO tickets (user_id, created_at) VALUES (?, ?)",
         (message.from_user.id, datetime.now().isoformat())
     ).lastrowid
     
-    # Save message
     conn.execute(
         "INSERT INTO ticket_msgs (ticket_id, sender, text, created_at) VALUES (?, ?, ?, ?)",
         (ticket_id, "user", message.text, datetime.now().isoformat())
@@ -346,7 +341,6 @@ def handle_support_message(message):
     conn.commit()
     conn.close()
     
-    # Notify admin
     bot.send_message(
         ADMIN_ID,
         f"🎫 <b>Новый тикет #{ticket_id}</b>\n"
@@ -355,7 +349,6 @@ def handle_support_message(message):
         f"<i>Ответить: /reply {message.from_user.id} ваш_текст</i>"
     )
     
-    # Confirm to user
     bot.send_message(
         message.chat.id,
         "✅ Сообщение отправлено в поддержку.\n"
@@ -475,7 +468,6 @@ def save_keys_batch(message):
     state = user_states[message.from_user.id]
     prod_id = state["prod_id"]
     
-    # Parse keys: split by newlines, strip whitespace, filter empty
     keys = [k.strip() for k in message.text.split("\n") if k.strip()]
     
     conn = get_db()
@@ -519,7 +511,7 @@ def admin_reply_to_ticket(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
-# ================= FLASK KEEP-ALIVE (for Render) =================
+# ================= FLASK KEEP-ALIVE =================
 app = Flask(__name__)
 
 @app.route("/")
@@ -530,10 +522,25 @@ def run_flask_server():
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
+# ================= KEEP-ALIVE PING (чтобы не засыпал) =================
+def keep_alive():
+    """Пинг каждые 10 минут чтобы Render не усыпил бота"""
+    port = int(os.getenv("PORT", 8080))
+    url = f"http://localhost:{port}"
+    while True:
+        time.sleep(600)  # 10 минут
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                logger.info("🏓 Keep-alive ping successful")
+            else:
+                logger.warning(f"⚠️ Keep-alive ping failed: {response.status_code}")
+        except Exception as e:
+            logger.error(f"❌ Keep-alive error: {e}")
+
 # ================= GRACEFUL SHUTDOWN =================
 def handle_shutdown(signum, frame):
     logger.info("🛑 Получен сигнал остановки. Завершаю работу...")
-    # DB connection is auto-closed by context
     import sys
     sys.exit(0)
 
@@ -549,10 +556,18 @@ if __name__ == "__main__":
     init_db()
     logger.info("✅ База данных готова.")
     
-    # Start Flask server in background thread (for Render keep-alive)
+    # Start Flask server in background thread
     flask_thread = threading.Thread(target=run_flask_server, daemon=True)
     flask_thread.start()
-    logger.info("🌐 Flask-сервер запущен (порт 8080).")
+    logger.info("🌐 Flask-сервер запущен")
+    
+    # Даем Flask время запуститься
+    time.sleep(2)
+    
+    # Запускаем keep-alive пинг
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
+    logger.info("🔄 Keep-alive пинг запущен (каждые 10 минут)")
     
     # Start Telegram polling
     logger.info("✅ Polling Telegram API...")
